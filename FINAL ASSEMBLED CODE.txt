@@ -1,0 +1,124 @@
+#include <SoftwareSerial.h>
+#define USE_ARDUINO_INTERRUPTS true    // Set-up low-level interrupts for most acurate BPM math
+#include <PulseSensorPlayground.h>     // Includes the PulseSensorPlayground Library
+
+
+SoftwareSerial mySerial(7, 8); //SIM900 Tx & Rx is connected to Arduino #7 & #8
+
+int val;                 // USED FOR LM35
+int tempPin = 1;         // USED FOR LM35
+
+// USED FOR PULSE SENSOR START
+
+const int PulseWire = 0;       // 'S' Signal pin connected to A0
+const int LED13 = 13;          // The on-board Arduino LED
+int Threshold = 550;           // Determine which Signal to "count as a beat" and which to ignore
+                               
+PulseSensorPlayground pulseSensor;  // Creates an object
+
+//USED FOR PULSE SENSOR END
+
+void SIM900power()
+{
+  pinMode(9, OUTPUT); 
+  digitalWrite(9,LOW);
+  delay(1000);
+  digitalWrite(9,HIGH);
+  delay(2000);
+  digitalWrite(9,LOW);
+  delay(3000);
+}
+void setup()
+{
+ 
+  Serial.begin(9600);     //USED FOR LM35
+
+//CODES FOR PULSE SENSOR START
+
+  // Configure the PulseSensor object, by assigning our variables to it
+	pulseSensor.analogInput(PulseWire);   
+	pulseSensor.blinkOnPulse(LED13);       // Blink on-board LED with heartbeat
+	pulseSensor.setThreshold(Threshold);   
+
+	// Double-check the "pulseSensor" object was created and began seeing a signal
+	if (pulseSensor.begin()) 
+	{
+		Serial.println("PulseSensor object created!");
+	}
+//CODES FOR PULSE SENSOR END
+
+
+//SENDING DATA THROUGH SIMM900 START
+
+  mySerial.begin(9600);
+
+  Serial.println("Initializing..."); 
+  delay(1000);
+
+  mySerial.println("AT"); //Connecting with SIM900
+  updateSerial();
+
+  mySerial.println("AT+CMGF=1"); // Configuring TEXT mode
+  updateSerial();
+  mySerial.println("AT+CMGS=\"+91xxxxxxxxxx\"");// registered number to which the data is to be sent xxxxxxxxxxx 
+  updateSerial();
+  mySerial.print("PULSE SENSOR:" + myBPM + "TEMPERATURE READING:" +cel); //value content
+  updateSerial();
+  mySerial.write(26);
+
+//SENDING DATA THROUGH SIM900 END
+
+}
+
+
+
+void loop()
+{
+  updateSerial(); // CONNECTION CODE
+
+  //LM35 CODES START
+
+  val = analogRead(tempPin);
+  float mv = ( val/1024.0)*5000;
+  float cel = mv/10;
+  float farh = (cel*9)/5 + 32;
+  Serial.print("TEMPRATURE = ");
+  Serial.print(cel);
+  Serial.print("*C");
+  Serial.println();
+  delay(1000);
+	/* uncomment this to get temperature in farenhite
+	Serial.print("TEMPRATURE = ");
+	Serial.print(farh);
+	Serial.print("*F");
+	Serial.println();
+	*/
+
+  //LM35 CODES END
+
+ //BPM MEASURING CODE START
+  int myBPM = pulseSensor.getBeatsPerMinute();      // Calculates BPM
+
+	if (pulseSensor.sawStartOfBeat()) {               // Constantly test to see if a beat happened
+		Serial.print("BPM: ");
+		Serial.println(myBPM);                        // Print the BPM value
+		}
+
+	delay(20);
+
+//BPM MEASURING CODE END
+
+}
+
+void updateSerial()
+{
+  delay(500);
+  while (Serial.available()) 
+  {
+    mySerial.write(Serial.read());//Forward what Serial received to Software Serial Port
+  }
+  while(mySerial.available()) 
+  {
+    Serial.write(mySerial.read());//Forward what Software Serial received to Serial Port
+  }
+}
